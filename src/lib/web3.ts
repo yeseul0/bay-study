@@ -255,3 +255,47 @@ export async function leaveStudy(
     }
   }
 }
+
+// 현재 사용자의 실제 예치금 잔액 조회
+export async function getMyBalance(proxyAddress: string): Promise<{ success: boolean; balance?: string; message: string }> {
+  // 1. MetaMask 연결 확인
+  if (!window.ethereum) {
+    return { success: false, message: 'MetaMask를 설치해주세요.' };
+  }
+
+  try {
+    // 2. 현재 연결된 지갑 주소 가져오기
+    const walletAddress = await connectWallet();
+    if (!walletAddress) {
+      return { success: false, message: '지갑 연결에 실패했습니다.' };
+    }
+
+    // 3. Web3 초기화
+    const { ethers } = await import('ethers');
+    const provider = new ethers.BrowserProvider(window.ethereum!);
+
+    // 4. 스터디 컨트랙트 인스턴스 생성 (읽기 전용)
+    const studyContract = new ethers.Contract(proxyAddress, STUDY_GROUP_ABI, provider);
+
+    // 5. balances 매핑에서 현재 사용자 잔액 조회
+    console.log('💰 잔액 조회 중:', { proxyAddress, walletAddress });
+    const balance = await studyContract.balances(walletAddress);
+
+    // BigInt를 문자열로 변환
+    const balanceString = balance.toString();
+    console.log('💰 현재 잔액:', balanceString);
+
+    return {
+      success: true,
+      balance: balanceString,
+      message: '잔액 조회 완료'
+    };
+
+  } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+    console.error('❌ 잔액 조회 실패:', error);
+    return {
+      success: false,
+      message: error.message || '잔액 조회 중 오류가 발생했습니다.'
+    };
+  }
+}

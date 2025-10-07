@@ -5,7 +5,7 @@ import AuthError from '@/components/AuthError';
 import CreateStudyModal from '@/components/CreateStudyModal';
 import RepositorySelectModal from '@/components/RepositorySelectModal';
 import { authenticatedFetch, isAuthError, parseAuthError } from '@/lib/auth';
-import { joinStudy, leaveStudy } from '@/lib/web3';
+import { joinStudy, leaveStudy, getMyBalance } from '@/lib/web3';
 import { fetchStudyRepositories, extractRepoName, StudyRepositoriesResponse } from '@/lib/github';
 
 interface Study {
@@ -36,6 +36,8 @@ interface Study {
   totalDays?: number;
   completedDays?: number;
   attendanceRate?: number;
+  // 실제 블록체인 잔액
+  actualBalance?: string;
   // 백엔드에서 올 수 있는 추가 필드들
   [key: string]: unknown;
 }
@@ -53,6 +55,29 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchStudies();
   }, []);
+
+  // 모든 스터디의 실제 잔액 가져오기
+  const fetchAllBalances = async (studiesArray: Study[]) => {
+    const updatedStudies = await Promise.all(
+      studiesArray.map(async (study) => {
+        if (study.proxyAddress && (study.isParticipating || study.isOwner || study.isParticipant)) {
+          try {
+            const balanceResult = await getMyBalance(study.proxyAddress);
+            if (balanceResult.success && balanceResult.balance) {
+              return {
+                ...study,
+                actualBalance: balanceResult.balance
+              };
+            }
+          } catch (error) {
+            console.error(`잔액 조회 실패 (${study.studyName}):`, error);
+          }
+        }
+        return study;
+      })
+    );
+    setStudies(updatedStudies);
+  };
 
   const fetchStudies = async () => {
     try {
@@ -73,6 +98,9 @@ export default function DashboardPage() {
 
         // 🚀 최적화: 모든 스터디의 레포지토리를 한번에 가져오기
         await fetchAllRepositories(studiesArray);
+
+        // 💰 실제 잔액 가져오기 (참여중인 스터디만)
+        await fetchAllBalances(studiesArray);
 
       } else if (isAuthError(response)) {
         // 401 에러 처리
@@ -261,7 +289,7 @@ export default function DashboardPage() {
 
         {/* 접히는 콘텐츠 - 절대위치로 겹쳐서 표시 */}
         {isExpanded && (
-          <div className="absolute top-full left-0 right-0 mt-2 space-y-2 bg-white border border-gray-200 rounded-lg p-3 shadow-lg z-50 max-h-64 overflow-y-auto">
+          <div className="absolute top-full left-0 right-0 mt-2 space-y-2 bg-white border border-gray-200 rounded-lg p-3 shadow-xl z-[999] max-h-64 overflow-y-auto">
             {repositories.participants.map((participant) => (
               <div key={participant.participantWallet} className="bg-gray-50 rounded-lg p-3">
                 <div className="flex items-center space-x-2 mb-2">
@@ -406,7 +434,7 @@ export default function DashboardPage() {
             return (
               <div
                 key={study.id}
-                className={`group relative rounded-3xl shadow-lg border transition-all duration-500 overflow-hidden hover:-translate-y-2 ${
+                className={`group relative rounded-3xl shadow-lg border transition-all duration-500 hover:-translate-y-2 ${
                   isActive && isParticipating
                     ? 'bg-white border-orange-400 hover:shadow-2xl hover:border-red-500 shadow-orange-300/50'
                     : isParticipating
@@ -416,7 +444,7 @@ export default function DashboardPage() {
               >
                 {/* 불타는 효과 - 스터디 시간대일 때만 표시 */}
                 {isActive && (
-                  <>
+                  <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
                     {/* 모서리 불타는 효과들 */}
                     <div className="absolute -top-3 -right-3 w-10 h-10 bg-gradient-to-r from-orange-400 to-red-500 rounded-full opacity-80 animate-ping"></div>
                     <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-r from-red-400 to-orange-500 rounded-full opacity-90 animate-pulse"></div>
@@ -431,7 +459,7 @@ export default function DashboardPage() {
 
                     <div className="absolute top-1/2 -right-1 w-3 h-3 bg-gradient-to-r from-yellow-400 to-red-400 rounded-full animate-bounce delay-700"></div>
                     <div className="absolute bottom-1/4 -left-1 w-3 h-3 bg-gradient-to-r from-orange-400 to-red-500 rounded-full animate-pulse delay-500"></div>
-                  </>
+                  </div>
                 )}
 
                 <div className="p-8">
@@ -525,7 +553,7 @@ export default function DashboardPage() {
                 )}
 
                 {/* 현재 내 예치금 (참여중인 경우에만) */}
-                {isParticipating && study.depositAmount && (
+                {isParticipating && (study.actualBalance || study.depositAmount) && (
                   <div className="mb-4">
                     <div className="bg-green-50 border border-green-200 rounded-lg p-2">
                       <div className="flex items-center justify-between">
@@ -534,8 +562,12 @@ export default function DashboardPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                           </svg>
                           <div>
-                            <p className="text-xs text-green-600 font-medium">현재 내 예치금</p>
-                            <p className="text-sm font-bold text-green-700">{formatUSDC(study.depositAmount)} USDC</p>
+                            <p className="text-xs text-green-600 font-medium">
+                              {study.actualBalance ? '현재 내 예치금' : '예치금 (조회중...)'}
+                            </p>
+                            <p className="text-sm font-bold text-green-700">
+                              {study.actualBalance ? formatUSDC(study.actualBalance) : formatUSDC(study.depositAmount || '0')} USDC
+                            </p>
                           </div>
                         </div>
                         <button
