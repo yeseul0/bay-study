@@ -30,7 +30,7 @@ export default function GitHubOAuth({
     const clientId = process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID;
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
     const redirectUri = `${backendUrl}/auth/github/callback`; // NestJS 백엔드 콜백
-    const scope = 'read:user,user:email,repo';
+    const scope = 'read:user,user:email,repo,admin:repo_hook';
 
     // 로그인 후 돌아올 페이지 지정
     const returnUrl = redirectTo || `${window.location.origin}/dashboard`;

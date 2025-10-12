@@ -51,7 +51,6 @@ export default function CreateStudyModal({ isOpen, onClose, onSuccess }: CreateS
     for (let i = 0; i <= 26; i++) {
       const period = i < 12 ? '오전' : i < 24 ? '오후' : '다음날 오전';
       const hour12 = i === 0 ? 12 : i <= 12 ? i : i <= 24 ? i - 12 : i - 24;
-
       options.push({
         value: i,
         label: `${period} ${hour12}시 (${String(i).padStart(2, '0')}:00)`
