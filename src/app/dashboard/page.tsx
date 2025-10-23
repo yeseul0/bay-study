@@ -54,6 +54,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchStudies();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 모든 스터디의 실제 잔액 가져오기
@@ -133,7 +134,7 @@ export default function DashboardPage() {
         try {
           const repos = await fetchStudyRepositories(study.proxyAddress!);
           repositoriesData[study.proxyAddress!] = repos;
-        } catch (error) {
+        } catch {
           // 실패해도 빈 데이터로 설정
           repositoriesData[study.proxyAddress!] = { success: false, participants: [], message: '' };
         }
