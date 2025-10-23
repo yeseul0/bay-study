@@ -496,7 +496,7 @@ export default function DashboardPage() {
                   {study.proxyAddress && (
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => window.open(`https://sepolia.etherscan.io/address/${study.proxyAddress}`, '_blank')}
+                        onClick={() => window.open(`${process.env.NEXT_PUBLIC_ETHERSCAN_ADDRESS_URL || 'https://sepolia.etherscan.io/address'}/${study.proxyAddress}`, '_blank')}
                         className="bg-gray-100 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-200 hover:border-gray-300 transition-colors cursor-pointer"
                         title="Etherscan에서 보기"
                       >
