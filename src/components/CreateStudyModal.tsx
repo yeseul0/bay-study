@@ -45,10 +45,10 @@ export default function CreateStudyModal({ isOpen, onClose, onSuccess }: CreateS
     return hour * 3600; // 시간 * 3600초
   };
 
-  // 시간 옵션 생성 (00시~26시)
+  // 시간 옵션 생성 (03시~26시) - 새벽 3시부터 시작
   const generateTimeOptions = () => {
     const options = [];
-    for (let i = 0; i <= 26; i++) {
+    for (let i = 3; i <= 26; i++) {
       const period = i < 12 ? '오전' : i < 24 ? '오후' : '다음날 오전';
       const hour12 = i === 0 ? 12 : i <= 12 ? i : i <= 24 ? i - 12 : i - 24;
       options.push({
