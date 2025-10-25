@@ -57,6 +57,22 @@ export default function DashboardPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // MetaMask 네트워크 변경 감지
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.ethereum) {
+      const handleChainChanged = () => {
+        console.log('🌐 네트워크 변경 감지 - 페이지 새로고침');
+        window.location.reload();
+      };
+
+      window.ethereum.on('chainChanged', handleChainChanged);
+
+      return () => {
+        window.ethereum.removeListener('chainChanged', handleChainChanged);
+      };
+    }
+  }, []);
+
   // 모든 스터디의 실제 잔액 가져오기
   const fetchAllBalances = async (studiesArray: Study[]) => {
     const updatedStudies = await Promise.all(

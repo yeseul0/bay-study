@@ -8,7 +8,7 @@ const ERC20_ABI = [
 ];
 
 // Testnet USDC 컨트랙트 주소
-const USDC_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS || "0x068E4cb0bA7502D20FBF65BD84316EC6252591a2";
+const USDC_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS || "0x0909Cc85477525dd9D56C17cA316850E0F9AAFeF";
 
 
 declare global {
@@ -18,6 +18,59 @@ declare global {
       on: (event: string, handler: (...args: unknown[]) => void) => void;
       removeListener: (event: string, handler: (...args: unknown[]) => void) => void;
     };
+  }
+}
+
+// 네트워크 확인 및 자동 전환 함수
+async function checkNetwork(): Promise<{ success: boolean; message?: string }> {
+  const REQUIRED_CHAIN_ID = process.env.NEXT_PUBLIC_CHAIN_ID || '0xa869';
+
+  try {
+    // 항상 최신 chainId를 가져옴
+    const currentChainId = await window.ethereum!.request({ method: 'eth_chainId' }) as string;
+    console.log('🌐 네트워크 체크:', {
+      현재: currentChainId,
+      요구됨: REQUIRED_CHAIN_ID,
+      일치여부: currentChainId.toLowerCase() === REQUIRED_CHAIN_ID.toLowerCase()
+    });
+
+    if (currentChainId.toLowerCase() !== REQUIRED_CHAIN_ID.toLowerCase()) {
+      // 자동으로 네트워크 전환 시도
+      try {
+        console.log('🔄 네트워크 자동 전환 시도...');
+        await window.ethereum!.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: REQUIRED_CHAIN_ID }],
+        });
+        console.log('✅ 네트워크 전환 완료');
+        return { success: true };
+      } catch (switchError: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        console.error('네트워크 전환 실패:', switchError);
+        const chainName = process.env.NEXT_PUBLIC_CHAIN_NAME || 'Avalanche Fuji';
+
+        if (switchError.code === 4902) {
+          return {
+            success: false,
+            message: `MetaMask에 ${chainName} 네트워크를 먼저 추가해주세요.`
+          };
+        } else if (switchError.code === 4001) {
+          return {
+            success: false,
+            message: '네트워크 전환을 취소하셨습니다.'
+          };
+        }
+
+        return {
+          success: false,
+          message: `${chainName} 네트워크로 전환해주세요.`
+        };
+      }
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('네트워크 확인 실패:', error);
+    return { success: false, message: '네트워크 확인에 실패했습니다.' };
   }
 }
 
@@ -45,22 +98,39 @@ export async function joinStudy(
   depositAmount: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    // 1. 지갑 연결
+    // 1. 네트워크 확인
+    const networkResult = await checkNetwork();
+    if (!networkResult.success) {
+      return { success: false, message: networkResult.message || '네트워크 확인 실패' };
+    }
+
+    // 2. 지갑 연결
     const walletAddress = await connectWallet();
     if (!walletAddress) {
       return { success: false, message: '지갑 연결이 필요합니다.' };
     }
 
-    // 2. Web3 초기화
+    // 3. Web3 초기화
     const { ethers } = await import('ethers');
     const provider = new ethers.BrowserProvider(window.ethereum!);
     const signer = await provider.getSigner();
+
+    // 네트워크 정보 확인
+    const network = await provider.getNetwork();
+    console.log('🌐 연결된 네트워크:', {
+      name: network.name,
+      chainId: network.chainId.toString(),
+    });
 
     // 3. 컨트랙트 인스턴스 생성
     const studyContract = new ethers.Contract(proxyAddress, STUDY_GROUP_ABI, signer);
     const usdcContract = new ethers.Contract(USDC_CONTRACT_ADDRESS, ERC20_ABI, signer);
 
     console.log('💰 스터디 참여 시작 (ERC-20 토큰)');
+    console.log('📍 컨트랙트 주소:', {
+      studyContract: proxyAddress,
+      usdcContract: USDC_CONTRACT_ADDRESS
+    });
 
     // 백엔드에서 받은 예치금 사용 (소수점 제거 후 BigInt 변환)
     const cleanAmount = depositAmount.split('.')[0]; // 소수점 앞 부분만 사용
@@ -97,6 +167,7 @@ export async function joinStudy(
 
     // 4. 1단계: USDC 토큰 approve
     console.log('📝 USDC 승인 요청 중...');
+    console.log('proxyAddress:', proxyAddress);
     const approveTx = await usdcContract.approve(proxyAddress, valueToSend);
     console.log('📡 USDC 승인 트랜잭션 전송 완료');
 
@@ -179,13 +250,19 @@ export async function leaveStudy(
   proxyAddress: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    // 1. 지갑 연결
+    // 1. 네트워크 확인
+    const networkResult = await checkNetwork();
+    if (!networkResult.success) {
+      return { success: false, message: networkResult.message || '네트워크 확인 실패' };
+    }
+
+    // 2. 지갑 연결
     const walletAddress = await connectWallet();
     if (!walletAddress) {
       return { success: false, message: '지갑 연결이 필요합니다.' };
     }
 
-    // 2. Web3 초기화
+    // 3. Web3 초기화
     const { ethers } = await import('ethers');
     const provider = new ethers.BrowserProvider(window.ethereum!);
     const signer = await provider.getSigner();
@@ -264,22 +341,33 @@ export async function getMyBalance(proxyAddress: string): Promise<{ success: boo
   }
 
   try {
-    // 2. 현재 연결된 지갑 주소 가져오기
+    // 2. 네트워크 확인
+    const networkResult = await checkNetwork();
+    if (!networkResult.success) {
+      return { success: false, message: networkResult.message || '네트워크 확인 실패' };
+    }
+
+    // 3. 현재 연결된 지갑 주소 가져오기
     const walletAddress = await connectWallet();
     if (!walletAddress) {
       return { success: false, message: '지갑 연결에 실패했습니다.' };
     }
 
-    // 3. Web3 초기화
+    // 4. Web3 초기화
     const { ethers } = await import('ethers');
     const provider = new ethers.BrowserProvider(window.ethereum!);
+    const signer = await provider.getSigner();
 
-    // 4. 스터디 컨트랙트 인스턴스 생성 (읽기 전용)
-    const studyContract = new ethers.Contract(proxyAddress, STUDY_GROUP_ABI, provider);
+
+    // . 컨트랙트 인스턴스 생성
+    const studyContract = new ethers.Contract(proxyAddress, STUDY_GROUP_ABI, signer);
 
     // 5. balances 매핑에서 현재 사용자 잔액 조회
     console.log('💰 잔액 조회 중:', { proxyAddress, walletAddress });
-    const balance = await studyContract.balances(walletAddress);
+    // 참여자인 경우에만 잔액 조회
+
+    const balance = await studyContract.getBalance(walletAddress);
+    console.log(balance);
 
     // BigInt를 문자열로 변환
     const balanceString = balance.toString();
@@ -293,6 +381,17 @@ export async function getMyBalance(proxyAddress: string): Promise<{ success: boo
 
   } catch (error: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
     console.error('❌ 잔액 조회 실패:', error);
+
+    // BAD_DATA 에러는 컨트랙트가 초기화되지 않았거나 참여자가 아닌 경우
+    if (error.code === 'BAD_DATA') {
+      console.log('⚠️ 컨트랙트 미초기화 또는 미참여 상태 - 잔액 0으로 처리');
+      return {
+        success: true,
+        balance: '0',
+        message: '아직 참여하지 않았거나 컨트랙트가 초기화되지 않았습니다.'
+      };
+    }
+
     return {
       success: false,
       message: error.message || '잔액 조회 중 오류가 발생했습니다.'
