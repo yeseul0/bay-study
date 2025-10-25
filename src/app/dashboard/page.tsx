@@ -68,7 +68,7 @@ export default function DashboardPage() {
       window.ethereum.on('chainChanged', handleChainChanged);
 
       return () => {
-        window.ethereum.removeListener('chainChanged', handleChainChanged);
+        window.ethereum?.removeListener('chainChanged', handleChainChanged);
       };
     }
   }, []);
