@@ -28,11 +28,11 @@ async function checkNetwork(): Promise<{ success: boolean; message?: string }> {
   try {
     // 항상 최신 chainId를 가져옴
     const currentChainId = await window.ethereum!.request({ method: 'eth_chainId' }) as string;
-    console.log('🌐 네트워크 체크:', {
-      현재: currentChainId,
-      요구됨: REQUIRED_CHAIN_ID,
-      일치여부: currentChainId.toLowerCase() === REQUIRED_CHAIN_ID.toLowerCase()
-    });
+    // console.log('🌐 네트워크 체크:', {
+    //   현재: currentChainId,
+    //   요구됨: REQUIRED_CHAIN_ID,
+    //   일치여부: currentChainId.toLowerCase() === REQUIRED_CHAIN_ID.toLowerCase()
+    // });
 
     if (currentChainId.toLowerCase() !== REQUIRED_CHAIN_ID.toLowerCase()) {
       // 자동으로 네트워크 전환 시도
@@ -115,12 +115,6 @@ export async function joinStudy(
     const provider = new ethers.BrowserProvider(window.ethereum!);
     const signer = await provider.getSigner();
 
-    // 네트워크 정보 확인
-    const network = await provider.getNetwork();
-    console.log('🌐 연결된 네트워크:', {
-      name: network.name,
-      chainId: network.chainId.toString(),
-    });
 
     // 3. 컨트랙트 인스턴스 생성
     const studyContract = new ethers.Contract(proxyAddress, STUDY_GROUP_ABI, signer);
@@ -362,16 +356,16 @@ export async function getMyBalance(proxyAddress: string): Promise<{ success: boo
     // . 컨트랙트 인스턴스 생성
     const studyContract = new ethers.Contract(proxyAddress, STUDY_GROUP_ABI, signer);
 
-    // 5. balances 매핑에서 현재 사용자 잔액 조회
-    console.log('💰 잔액 조회 중:', { proxyAddress, walletAddress });
-    // 참여자인 경우에만 잔액 조회
+    // 5. balances 매핑에서 현재 사용자 지갑 잔액 조회
+    // console.log('💰 잔액 조회 중:', { proxyAddress, walletAddress });
 
+    // 참여자인 경우에만 잔액 조회
     const balance = await studyContract.getBalance(walletAddress);
-    console.log(balance);
+    // console.log(balance);
 
     // BigInt를 문자열로 변환
     const balanceString = balance.toString();
-    console.log('💰 현재 잔액:', balanceString);
+    // console.log('💰 현재 잔액:', balanceString);
 
     return {
       success: true,
