@@ -1,0 +1,15 @@
+{
+    "redirects": [
+      {
+        "source": "/:path((?!_next|api|favicon.ico).*)*",
+        "has": [
+          {
+            "type": "host",
+            "value": "bay-study.vercel.app"
+          }
+        ],
+        "destination": "https://www.baycommit.xyz/:path*",
+        "permanent": true
+      }
+    ]
+  }
