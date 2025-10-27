@@ -1,7 +1,7 @@
 {
     "redirects": [
       {
-        "source": "/:path((?!_next|api|favicon.ico).*)*",
+        "source": "/:path*",
         "has": [
           {
             "type": "host",
