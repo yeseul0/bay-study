@@ -8,6 +8,32 @@ import { authenticatedFetch, isAuthError, parseAuthError } from '@/lib/auth';
 import { joinStudy, leaveStudy, getMyBalance } from '@/lib/web3';
 import { fetchStudyRepositories, extractRepoName, StudyRepositoriesResponse } from '@/lib/github';
 
+interface CommitInfo {
+  commitId: string;
+  commitMessage: string;
+  commitTime: number;
+}
+
+interface SessionParticipant {
+  githubEmail: string;
+  walletAddress: string;
+  commit: CommitInfo | null;
+}
+
+interface StudySession {
+  sessionId: number | null;
+  studyDate: string;
+  status: 'ACTIVE' | 'NO_SESSION';
+  startedAt: number | null;
+  participants: SessionParticipant[];
+}
+
+interface TodayCommitData {
+  studyName: string;
+  proxyAddress: string;
+  sessions: StudySession[];
+}
+
 interface Study {
   id: string;
   name?: string;
@@ -38,6 +64,8 @@ interface Study {
   attendanceRate?: number;
   // 실제 블록체인 잔액
   actualBalance?: string;
+  // 오늘 커밋 현황
+  todaySession?: StudySession;
   // 백엔드에서 올 수 있는 추가 필드들
   [key: string]: unknown;
 }
@@ -96,6 +124,46 @@ export default function DashboardPage() {
     setStudies(updatedStudies);
   };
 
+  // 오늘 커밋 현황 가져오기
+  const fetchTodayCommits = async () => {
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
+      const response = await authenticatedFetch(`${backendUrl}/study/all/commits/today`);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📅 오늘 커밋 현황:', data);
+
+        if (data.success && data.studies) {
+          // proxyAddress로 매칭해서 각 스터디에 커밋 현황 추가
+          const sessionDataMap = new Map<string, StudySession>();
+          data.studies.forEach((commitData: TodayCommitData) => {
+            // sessions 배열의 첫 번째 세션을 사용 (오늘 날짜 세션)
+            if (commitData.sessions && commitData.sessions.length > 0) {
+              sessionDataMap.set(commitData.proxyAddress.toLowerCase(), commitData.sessions[0]);
+            }
+          });
+
+          // 현재 studies state를 업데이트 (actualBalance 유지)
+          setStudies(prevStudies =>
+            prevStudies.map(study => {
+              if (study.proxyAddress) {
+                const todaySession = sessionDataMap.get(study.proxyAddress.toLowerCase());
+                return {
+                  ...study,
+                  todaySession
+                };
+              }
+              return study;
+            })
+          );
+        }
+      }
+    } catch (error) {
+      console.error('오늘 커밋 현황 조회 실패:', error);
+    }
+  };
+
   const fetchStudies = async () => {
     try {
       // authenticatedFetch를 사용하여 자동 인증 처리
@@ -118,6 +186,9 @@ export default function DashboardPage() {
 
         // 💰 실제 잔액 가져오기 (참여중인 스터디만)
         await fetchAllBalances(studiesArray);
+
+        // 📅 오늘 커밋 현황 가져오기 (prevStudies 사용하여 actualBalance 유지)
+        await fetchTodayCommits();
 
       } else if (isAuthError(response)) {
         // 401 에러 처리
@@ -247,6 +318,111 @@ export default function DashboardPage() {
     } catch {
       return '0';
     }
+  };
+
+  // 오늘 커밋 현황 섹션 컴포넌트
+  const TodayCommitSection = ({
+    todaySession
+  }: {
+    todaySession?: StudySession;
+  }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    // 세션이 없거나 참여자가 없으면 표시 안 함
+    if (!todaySession || !todaySession.participants || todaySession.participants.length === 0) {
+      return null;
+    }
+
+    // 커밋한 사람 수 계산
+    const committedCount = todaySession.participants.filter(p => p.commit !== null).length;
+    const totalCount = todaySession.participants.length;
+
+    return (
+      <div className="mb-4 relative">
+        {/* 토글 헤더 */}
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 rounded-lg transition-colors border border-blue-200"
+        >
+          <div className="flex items-center space-x-2">
+            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            <span className="text-sm font-bold text-blue-700">오늘 커밋 현황</span>
+            <span className="text-xs text-blue-600 bg-blue-200 px-2 py-1 rounded-full font-semibold">
+              {committedCount}/{totalCount}
+            </span>
+          </div>
+
+          {/* 토글 아이콘 */}
+          <svg
+            className={`w-4 h-4 text-blue-600 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {/* 접히는 콘텐츠 */}
+        {isExpanded && (
+          <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-blue-200 rounded-lg p-3 shadow-xl z-[999] max-h-64 overflow-y-auto">
+            <div className="space-y-2">
+              {todaySession.participants.map((participant, index) => {
+                const hasCommitted = participant.commit !== null;
+
+                return (
+                  <div
+                    key={participant.walletAddress || participant.githubEmail || `participant-${index}`}
+                    className={`flex items-center justify-between p-2 rounded-lg ${
+                      hasCommitted ? 'bg-green-50 border border-green-200' : 'bg-gray-50 border border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center ${
+                        hasCommitted ? 'bg-gradient-to-r from-green-400 to-emerald-500' : 'bg-gray-300'
+                      }`}>
+                        <span className="text-xs text-white font-bold">
+                          {participant.githubEmail?.charAt(0).toUpperCase() || '?'}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-700">
+                          {participant.githubEmail?.split('@')[0] || 'Unknown'}
+                        </p>
+                        {participant.commit?.commitTime && (
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-gray-500">
+                              {new Date(participant.commit.commitTime * 1000).toLocaleTimeString('ko-KR', {
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                            {participant.commit?.commitMessage && (
+                              <p className="text-xs text-gray-600 italic truncate max-w-[180px]" title={participant.commit.commitMessage}>
+                                💬 {participant.commit.commitMessage}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      {hasCommitted ? (
+                        <span className="text-green-600 font-bold text-sm">✓ 완료</span>
+                      ) : (
+                        <span className="text-gray-400 font-medium text-sm">미완료</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // 연결된 레포지토리 섹션 컴포넌트 (최적화됨 - API 호출 제거)
@@ -637,6 +813,11 @@ export default function DashboardPage() {
                     )}
                   </div>
                 )}
+
+                {/* 오늘 커밋 현황 */}
+                <TodayCommitSection
+                  todaySession={study.todaySession}
+                />
 
                 {/* 연결된 레포지토리 */}
                 <StudyRepositoriesSection

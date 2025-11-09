@@ -360,12 +360,12 @@ export async function getMyBalance(proxyAddress: string): Promise<{ success: boo
     // console.log('💰 잔액 조회 중:', { proxyAddress, walletAddress });
 
     // 참여자인 경우에만 잔액 조회
-    const balance = await studyContract.getBalance(walletAddress);
-    // console.log(balance);
+    const balance = await studyContract.balances(walletAddress);
+    console.log(balance);
 
     // BigInt를 문자열로 변환
     const balanceString = balance.toString();
-    // console.log('💰 현재 잔액:', balanceString);
+    console.log('💰 현재 잔액:', balanceString);
 
     return {
       success: true,
@@ -383,6 +383,22 @@ export async function getMyBalance(proxyAddress: string): Promise<{ success: boo
         success: true,
         balance: '0',
         message: '아직 참여하지 않았거나 컨트랙트가 초기화되지 않았습니다.'
+      };
+    }
+
+    // CALL_EXCEPTION 에러는 컨트랙트가 존재하지 않거나 호출에 실패한 경우
+    if (error.code === 'CALL_EXCEPTION') {
+      console.log('⚠️ 컨트랙트 호출 실패 - 잔액 0으로 처리');
+      console.log('   컨트랙트 주소:', proxyAddress);
+      console.log('   에러 상세:', {
+        code: error.code,
+        action: error.action,
+        reason: error.reason
+      });
+      return {
+        success: true,
+        balance: '0',
+        message: '컨트랙트 초기화 대기중이거나 아직 참여하지 않았습니다.'
       };
     }
 
